@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mario Sky Hopper</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(#6ec6ff, #eaf9ff);
+        font-family: Arial, sans-serif;
+    }
+
+    canvas {
+        background: #87ceeb;
+        border: 4px solid #222;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="800" height="500"></canvas>
+
+<script>
+/* ================= SETUP ================= */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const GRAVITY = 0.6;
+const MOVE_SPEED = 5;
+const JUMP_FORCE = -12;
+const FAST_FALL = 1.8;
+
+/* ================= INPUT ================= */
+const keys = {};
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+/* ================= PLAYER ================= */
+const player = {
+    x: 100,
+    y: 300,
+    width: 30,
+    height: 40,
+    velX: 0,
+    velY: 0,
+    jumps: 0,
+    maxJumps: 2,
+    jumpHeld: false,
+    onGround: false
+};
+
+/* ================= PLATFORMS ================= */
+const platforms = [];
+
+function addPlatform(x, y, w, h, type = "static") {
+    platforms.push({
+        x, y, w, h,
+        startX: x,
+        startY: y,
+        type,
+        dx: type === "moving" ? 1.5 : 0,
+        dy: 0,
+        triggered: false,
+        visible: true
+    });
+}
+
+/* Initial platforms */
+addPlatform(50, 420, 200, 20);
+addPlatform(320, 360, 120, 20, "moving");
+addPlatform(520, 300, 120, 20, "falling");
+addPlatform(200, 240, 120, 20, "disappearing");
+addPlatform(420, 180, 140, 20);
+addPlatform(600, 120, 120, 20, "moving");
+
+/* ================= RESET ================= */
+function resetGame() {
+    player.x = 100;
+    player.y = 300;
+    player.velX = 0;
+    player.velY = 0;
+    player.jumps = 0;
+
+    platforms.forEach(p => {
+        p.x = p.startX;
+        p.y = p.startY;
+        p.dy = 0;
+        p.triggered = false;
+        p.visible = true;
+    });
+}
+
+/* ================= UPDATE ================= */
+function update() {
+    /* Horizontal movement */
+    if (keys["a"]) player.velX = -MOVE_SPEED;
+    else if (keys["d"]) player.velX = MOVE_SPEED;
+    else player.velX *= 0.85;
+
+    /* Jump */
+    if (keys["w"] && !player.jumpHeld && player.jumps < player.maxJumps) {
+        player.velY = JUMP_FORCE;
+        player.jumps++;
+        player.jumpHeld = true;
+    }
+    if (!keys["w"]) player.jumpHeld = false;
+
+    /* Fast fall */
+    if (keys["s"]) player.velY += FAST_FALL;
+
+    /* Gravity */
+    player.velY += GRAVITY;
+
+    /* Apply movement */
+    player.x += player.velX;
+    player.y += player.velY;
+
+    /* Screen bounds */
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.width > canvas.width)
+        player.x = canvas.width - player.width;
+
+    player.onGround = false;
+
+    /* Platforms */
+    platforms.forEach(p => {
+        if (!p.visible) return;
+
+        /* Moving platforms */
+        if (p.type === "moving") {
+            p.x += p.dx;
+            if (p.x <= 0 || p.x + p.w >= canvas.width) {
+                p.dx *= -1;
+            }
+        }
+
+        /* Collision check (safe) */
+        const fallingOnto =
+            player.velY >= 0 &&
+            player.x + player.width > p.x &&
+            player.x < p.x + p.w &&
+            player.y + player.height <= p.y + player.velY &&
+            player.y + player.height >= p.y;
+
+        if (fallingOnto) {
+            player.y = p.y - player.height;
+            player.velY = 0;
+            player.onGround = true;
+            player.jumps = 0;
+
+            if (p.type === "moving") {
+                player.x += p.dx;
+            }
+
+            if (p.type === "falling" && !p.triggered) {
+                p.triggered = true;
+                setTimeout(() => p.dy = 4, 250);
+            }
+
+            if (p.type === "disappearing") {
+                setTimeout(() => p.visible = false, 150);
+            }
+        }
+
+        /* Falling platform drop */
+        if (p.type === "falling" && p.triggered) {
+            p.y += p.dy;
+        }
+    });
+
+    /* Fell off screen */
+    if (player.y > canvas.height) {
+        resetGame();
+    }
+}
+
+/* ================= DRAW ================= */
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    /* Player */
+    ctx.fillStyle = "#ff3b3b";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    /* Platforms */
+    platforms.forEach(p => {
+        if (!p.visible) return;
+
+        if (p.type === "moving") ctx.fillStyle = "#4caf50";
+        else if (p.type === "falling") ctx.fillStyle = "#ff9800";
+        else if (p.type === "disappearing") ctx.fillStyle = "#9c27b0";
+        else ctx.fillStyle = "#6d4c41";
+
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+    });
+}
+
+/* ================= LOOP ================= */
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>
